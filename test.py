@@ -17,7 +17,7 @@ import seaborn as sns
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 SHEET_ID = os.getenv('SHEET_ID')
-GOOGLE_JSON = 'medical-462021-78bf30c680aa.json'
+GOOGLE_JSON = os.getenv('GOOGLE_JSON_PATH', 'medical-462021-78bf30c680aa.json')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Создаём клиента OpenAI (глобально)
@@ -46,12 +46,22 @@ COLUMN_SYNONYMS = {
 
 def get_df_from_gsheet():
     try:
-        if not os.path.exists(GOOGLE_JSON):
-            print(f"Файл {GOOGLE_JSON} не найден")
-            return pd.DataFrame()
-            
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_JSON, scope)
+        
+        # Сначала пробуем получить из переменной окружения
+        google_credentials = os.getenv('GOOGLE_CREDENTIALS')
+        if google_credentials:
+            import json
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(
+                json.loads(google_credentials), scope
+            )
+        else:
+            # Fallback к файлу (для локальной разработки)
+            if not os.path.exists(GOOGLE_JSON):
+                print(f"Файл {GOOGLE_JSON} не найден и GOOGLE_CREDENTIALS не установлен")
+                return pd.DataFrame()
+            creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_JSON, scope)
+        
         client = gspread.authorize(creds)
         sheet = client.open_by_key(SHEET_ID).worksheet("Ответы на форму")
         data = sheet.get_all_records()
